@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+/* Move OpenLayers controls to top-right */
+.ol-control {
+  left: auto !important;
+  right: 10px !important;
+}
+
+/* Fullscreen stays at top */
+.ol-full-screen {
+  top: 10px !important;
+}
+
+/* Zoom goes below fullscreen */
+.ol-zoom {
+  top: 35px !important;
+}
