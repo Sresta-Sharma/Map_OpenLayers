@@ -6,6 +6,10 @@
   right: 10px !important;
 }
 
+.ol-control button {
+  cursor: pointer;
+}
+
 /* Fullscreen stays at top */
 .ol-full-screen {
   top: 10px !important;

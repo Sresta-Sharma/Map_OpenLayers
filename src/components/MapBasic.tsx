@@ -1,86 +1,103 @@
 import { useEffect, useRef } from "react";
 import "ol/ol.css";
 
-import { fromLonLat } from "ol/proj";
 import Map from "ol/Map";
 import View from "ol/View";
-import TileLayer from "ol/layer/Tile";
-import OSM from "ol/source/OSM";
-import XYZ from "ol/source/XYZ";
+import Overlay from "ol/Overlay";
+import { fromLonLat } from "ol/proj";
 import { defaults as defaultControls, FullScreen } from "ol/control";
+
+import {
+  createBaseLayers,
+  createPointLayer,
+  createPolygonLayer,
+  createLineLayer,
+} from "../map/layers";
+
+import LayerSwitcher from "./LayerSwitcher";
+import Popup from "./Popup";
 
 export default function MapBasic() {
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
 
-  const osmLayerRef = useRef<TileLayer | null>(null);
-  const topoLayerRef = useRef<TileLayer | null>(null);
+  const osmLayerRef = useRef<any>(null);
+  const topoLayerRef = useRef<any>(null);
 
   useEffect(() => {
-    const osmLayer = new TileLayer({
-      source: new OSM(),
-      visible: true,
-    });
-
-    const topoLayer = new TileLayer({
-      source: new XYZ({
-        url: "https://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png",
-      }),
-      visible: false,
-    });
-
-     // store references
+    const { osmLayer, topoLayer } = createBaseLayers();
     osmLayerRef.current = osmLayer;
     topoLayerRef.current = topoLayer;
-    
+
+    const pointLayer = createPointLayer();
+    const polygonLayer = createPolygonLayer();
+    const lineLayer = createLineLayer();
+
+    polygonLayer.setZIndex(1);
+    lineLayer.setZIndex(2);
+    pointLayer.setZIndex(3);
+
     const map = new Map({
       target: mapRef.current!,
-      layers: [
-        osmLayer,
-        topoLayer,
-      ],
+      layers: [osmLayer, topoLayer, polygonLayer, lineLayer, pointLayer],
       view: new View({
-        center: fromLonLat([85.3240, 27.7172]), // Kathmandu
-        zoom: 12,
+        center: fromLonLat([85.3240, 27.7172]),
+        zoom: 5,
       }),
-      controls: defaultControls().extend([
-        new FullScreen()
-      ]),
+      controls: defaultControls().extend([new FullScreen()]),
+    });
+
+    const overlay = new Overlay({
+      element: popupRef.current!,
+      positioning: "bottom-center",
+      offset: [0, -25],
+      stopEvent: false,
+    });
+
+    map.addOverlay(overlay);
+
+    popupRef.current
+      ?.querySelector("#popup-close")
+      ?.addEventListener("click", () =>
+        popupRef.current?.classList.add("hidden")
+      );
+
+    map.on("singleclick", (evt) => {
+      let selected: any = null;
+
+      map.forEachFeatureAtPixel(evt.pixel, (f) => {
+        if (!selected) selected = f;
+        if (f.getGeometry()?.getType() === "Point") {
+          selected = f;
+          return true;
+        }
+        return false;
+      });
+
+      if (selected && popupRef.current) {
+        overlay.setPosition(evt.coordinate);
+        popupRef.current.querySelector("#popup-content")!.innerHTML =
+          selected.get("name") || "Feature";
+        popupRef.current.classList.remove("hidden");
+      } else {
+        popupRef.current?.classList.add("hidden");
+      }
+    });
+
+    map.on("pointermove", (evt) => {
+      map.getTargetElement().style.cursor = map.hasFeatureAtPixel(evt.pixel)
+        ? "pointer"
+        : "";
     });
 
     return () => map.setTarget(undefined);
   }, []);
 
   return (
-  <div className="w-full h-screen relative">
-
-    {/* Selector (Top Left) */}
-    <div className="absolute top-4 left-4 z-10">
-        <select
-          onChange={(e) => {
-            if (e.target.value === "osm") {
-              osmLayerRef.current?.setVisible(true);
-              topoLayerRef.current?.setVisible(false);
-            } else {
-              osmLayerRef.current?.setVisible(false);
-              topoLayerRef.current?.setVisible(true);
-            }
-          }}
-          className="bg-white/90 border border-gray-200 
-                     text-gray-700 text-sm rounded-lg shadow-md 
-                     px-3 py-2
-                     focus:outline-none focus:ring-2 focus:ring-blue-400 
-                     cursor-pointer"
-        >
-          <option value="osm">Map</option>
-          <option value="topo">Terrain</option>
-        </select>
+    <div className="w-full h-screen relative">
+      <LayerSwitcher osmRef={osmLayerRef} topoRef={topoLayerRef} />
+      <Popup ref={popupRef} />
+      <div ref={mapRef} className="w-full h-full rounded-xl shadow-lg" />
     </div>
-
-    {/* Map */}
-    <div
-      ref={mapRef}
-      className="w-full h-full rounded-xl overflow-hidden shadow-lg"
-    />
-  </div>
-);
+  );
 }
